@@ -1,6 +1,6 @@
 #!/bin/bash
 
-while getopts ":s:d:u:p:o:d:v:c" opt; do
+while getopts ":s:d:u:p:o:a:v:c:" opt; do
   case $opt in
   s)
     SERVER_NAME="$OPTARG"
@@ -22,7 +22,7 @@ while getopts ":s:d:u:p:o:d:v:c" opt; do
     POSTFIX_PASSWORD="$OPTARG"
     echo "POSTFIX_PASSWORD=${OPTARG}" | tee -a install.log
     ;;
-  d)
+  a)
     MAIL_DATABASE="$OPTARG"
     echo "MAIL_DATABASE=${OPTARG}" | tee -a install.log
     ;;
@@ -45,16 +45,17 @@ done
 }
 
 [[ -z "${DOMAIN_NAME}" ]] && {
-  echo "Domain was not setup" | tee -a install.log
+  echo "Domain was not setup"
   exit 127
 }
 
 [[ -z "${SERVER_NAME}" ]] && {
-  echo "Server Name was not setup" | tee -a install.log
+  echo "Server Name was not setup"
   exit 127
 }
 
-hostname ${SERVER_NAME}.${DOMAIN_NAME}
+hostname "${SERVER_NAME}.${DOMAIN_NAME}"
+hostname
 echo '' >install.log
 
 output() {
@@ -355,8 +356,6 @@ installPostfix() {
     postfix \
     postfix-mysql \
     mariadb-client \
-    opendkim \
-    opendkim-tools \
     postfix-policyd-spf-python \
     postfix-pcre |
     ts ["%F %H:%M:%S"] |
@@ -944,8 +943,7 @@ _EOF_
   set +e
   SIGNTABLE_RECORD_EXISTS=$(grep -n "$SIGNTABLE" /etc/opendkim/signing.table)
   set -e
-  SIGNTABLE_RECORD_EXISTS_RESULT="$?"
-  if [ "$SIGNTABLE_RECORD_EXISTS_RESULT" = "1" ]; then
+  if [ -z "$SIGNTABLE_RECORD_EXISTS" ]; then
     output "FQDN record not found in the signing table, adding"
     printf "*@$FQDN $SHORT_FQDN" >>/etc/opendkim/signing.table
   else
@@ -955,8 +953,7 @@ _EOF_
   set +e
   KEYTABLE_RECORD_EXISTS=$(grep -n "$KEYTABLE" /etc/opendkim/key.table)
   set -e
-  KEYTABLE_RECORD_EXISTS_RESULT="$?"
-  if [ "$KEYTABLE_RECORD_EXISTS_RESULT" = "1" ]; then
+  if [ -z "$KEYTABLE_RECORD_EXISTS" ]; then
     output "Key record not found in the signing table, adding"
     printf "$SHORT_FQDN $FQDN:$KEYNAME:/etc/opendkim/keys/$SHORT_FQDN.private" >>/etc/opendkim/key.table
   else
@@ -1497,7 +1494,7 @@ installPostfixAdmin() {
 \$CONF['domain_quota_default'] = '0';
 ?>
 _EOF_
-
+  sudo systemctl restart nginx
   setupDatabase=$(curl https://mail.local-build.co/setup.php -k)
   set +e
   sudo bash /var/www/postfixadmin/scripts/postfixadmin-cli admin add superadmin@${localDomain} --superadmin 1 --active 1 --password ${POSTFIX_PASSWORD} --password2 ${POSTFIX_PASSWORD}
@@ -1541,6 +1538,9 @@ _EOF_
 updateSystem
 # Installing Web Service and Certification Service
 installCertBot
+# installing Certificates
+generateCertificate
+
 installNginx
 setupNginx
 # Installing supporting database for postfix
@@ -1578,8 +1578,6 @@ setupSpamAssassin
 }
 # Initiate Mail Database
 initDatabase
-# installing Certificates
-generateCertificate
 
 installPostfixAdmin
 
