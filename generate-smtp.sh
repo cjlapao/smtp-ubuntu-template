@@ -4,27 +4,35 @@ while getopts ":s:d:u:p:o:d:v:c" opt; do
   case $opt in
   s)
     SERVER_NAME="$OPTARG"
+    echo "SERVER_NAME=${OPTARG}" | tee -a install.log
     ;;
   d)
     DOMAIN_NAME="$OPTARG"
+    echo "DOMAIN_NAME=${OPTARG}" | tee -a install.log
     ;;
   u)
     SQL_USER="$OPTARG"
+    echo "SQL_USER=${OPTARG}" | tee -a install.log
     ;;
   p)
     SQL_PASSWORD="$OPTARG"
+    echo "SQL_PASSWORD=${OPTARG}" | tee -a install.log
     ;;
   o)
     POSTFIX_PASSWORD="$OPTARG"
+    echo "POSTFIX_PASSWORD=${OPTARG}" | tee -a install.log
     ;;
   d)
     MAIL_DATABASE="$OPTARG"
+    echo "MAIL_DATABASE=${OPTARG}" | tee -a install.log
     ;;
   v)
     INSTALL_ANTIVIRUS="$OPTARG"
+    echo "INSTALL_ANTIVIRUS=${OPTARG}" | tee -a install.log
     ;;
   c)
     EMAIL_CONFIG="$OPTARG"
+    echo "EMAIL_CONFIG=${OPTARG}" | tee -a install.log
     ;;
   \?)
     echo "Invalid option -$OPTARG" >&2
@@ -37,12 +45,12 @@ done
 }
 
 [[ -z "${DOMAIN_NAME}" ]] && {
-  echo "Domain was not setup"
+  echo "Domain was not setup" | tee -a install.log
   exit 127
 }
 
 [[ -z "${SERVER_NAME}" ]] && {
-  echo "Server Name was not setup"
+  echo "Server Name was not setup" | tee -a install.log
   exit 127
 }
 
@@ -62,7 +70,7 @@ checkForErrors() {
 
 updateSystem() {
 
-  hostname="${SERVER_NAME}.${DOMAIN_NAME}"
+  localHostname="${SERVER_NAME}.${DOMAIN_NAME}"
   echo "Getting the latest packages" | tee -a install.log
   set -o errexit # abort on nonzero exitstatus
   set -o nounset # abort on unbound variable
@@ -97,7 +105,7 @@ generateCertificate() {
     echo "Local domain not setup"
     exit 127
   }
-  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${hostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${hostname}/${hostname}.key /usr/share/ca-certificates/${hostname}/${hostname}.cer > /usr/share/ca-certificates/${hostname}/${hostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql' | ts ["%F %H:%M:%S"] | tee -a install.log
+  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql' | ts ["%F %H:%M:%S"] | tee -a install.log
 }
 
 installNginx() {
@@ -172,8 +180,8 @@ _EOF_
 server {
     listen 80;
     listen [::]:80;
-    server_name ${hostname}; 
-    return 301 https://${hostname}\$request_uri;
+    server_name ${localHostname}; 
+    return 301 https://${localHostname}\$request_uri;
 }
 
 server {
@@ -186,14 +194,14 @@ server {
     ssl_session_tickets off;
     ssl_prefer_server_ciphers on;
 
-    ssl_certificate     /usr/share/ca-certificates/${hostname}/fullchain.cer;
-    ssl_certificate_key /usr/share/ca-certificates/${hostname}/${hostname}.key;
-    ssl_trusted_certificate /usr/share/ca-certificates/${hostname}/ca.cer;
+    ssl_certificate     /usr/share/ca-certificates/${localHostname}/fullchain.cer;
+    ssl_certificate_key /usr/share/ca-certificates/${localHostname}/${localHostname}.key;
+    ssl_trusted_certificate /usr/share/ca-certificates/${localHostname}/ca.cer;
     
     ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
-    server_name ${hostname};
+    server_name ${localHostname};
     
     root /var/www/postfixadmin/public;
 
@@ -295,7 +303,7 @@ _EOF_
 }
 
 setupDatabase() {
-  echo ${hostname}
+  echo ${localHostname}
   echo "Setting up MariaDB SQL server..." | ts ["%F %H:%M:%S"] | tee -a install.log
   cp /etc/mysql/mariadb.conf.d/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
   cat <<_EOF_ >/etc/mysql/mariadb.conf.d/50-server.cnf
@@ -325,9 +333,9 @@ general_log             = 1
 log_error               = /var/log/mysql/error.log
 expire_logs_days        = 10
 max_binlog_size   = 100M
-ssl-ca=/usr/share/ca-certificates/${hostname}/ca.cer
-ssl-cert=/usr/share/ca-certificates/${hostname}/${hostname}.cer
-ssl-key=/usr/share/ca-certificates/${hostname}/${hostname}.key
+ssl-ca=/usr/share/ca-certificates/${localHostname}/ca.cer
+ssl-cert=/usr/share/ca-certificates/${localHostname}/${localHostname}.cer
+ssl-key=/usr/share/ca-certificates/${localHostname}/${localHostname}.key
 ssl-cipher=DHE-RSA-AES256-SHA:AES256-SHA:AES128-SHA
 ssl=off
 character-set-server  = utf8mb4
@@ -340,7 +348,7 @@ _EOF_
 
 installPostfix() {
   echo "Installing Postfix..." >>install.log
-  debconf-set-selections <<<"postfix postfix/mailname string $hostname"
+  debconf-set-selections <<<"postfix postfix/mailname string $localHostname"
   debconf-set-selections <<<"postfix postfix/main_mailer_type string 'Internet Site'"
 
   sudo apt-get install --assume-yes \
@@ -366,7 +374,7 @@ setupPostfix() {
 # is /etc/mailname.
 #myorigin = /etc/mailname
 compatibility_level=2
-smtpd_banner = $hostname ESMTP ${hostname}
+smtpd_banner = $localHostname ESMTP ${localHostname}
 biff = no
 
 # appending .domain is the MUA's job.
@@ -378,9 +386,9 @@ append_dot_mydomain = no
 readme_directory = no
 
 # TLS parameters
-smtpd_tls_cert_file=/usr/share/ca-certificates/${hostname}/fullchain.cer
-smtpd_tls_CAfile=/usr/share/ca-certificates/${hostname}/ca.cer
-smtpd_tls_key_file=/usr/share/ca-certificates/${hostname}/${hostname}.key
+smtpd_tls_cert_file=/usr/share/ca-certificates/${localHostname}/fullchain.cer
+smtpd_tls_CAfile=/usr/share/ca-certificates/${localHostname}/ca.cer
+smtpd_tls_key_file=/usr/share/ca-certificates/${localHostname}/${localHostname}.key
 smtpd_use_tls=yes
 smtpd_tls_auth_only = yes
 smtp_tls_security_level = may
@@ -1460,7 +1468,7 @@ installPostfixAdmin() {
   cat >/var/www/postfixadmin/config.local.php <<_EOF_
 <?php
 \$CONF['database_type'] = 'mysqli';
-\$CONF['database_host'] = '${hostname}';
+\$CONF['database_host'] = '${localHostname}';
 \$CONF['database_user'] = '${SQL_USER}';
 \$CONF['database_password'] = '${SQL_PASSWORD}';
 \$CONF['database_name'] = 'mail';
@@ -1474,8 +1482,8 @@ installPostfixAdmin() {
 );
 \$CONF['fetchmail'] = 'NO';
 \$CONF['show_footer_text'] = 'YES';
-\$CONF['footer_text'] = 'Return to ${hostname}';
-\$CONF['footer_link'] = 'https://${hostname}';
+\$CONF['footer_text'] = 'Return to ${localHostname}';
+\$CONF['footer_link'] = 'https://${localHostname}';
 \$CONF['quota'] = 'YES';
 \$CONF['domain_quota'] = 'YES';
 \$CONF['quota_multiplier'] = '1024000';
@@ -1524,7 +1532,7 @@ saveDnsConfiguration() {
 }
 _EOF_
   [ ! -z "$EMAIL_CONFIG" ] && {
-    cat /root/dns_config | mutt -s "${hostname} DNS configuration" ${EMAIL_CONFIG}
+    cat /root/dns_config | mutt -s "${localHostname} DNS configuration" ${EMAIL_CONFIG}
     output "Configuration sent to ${EMAIL_CONFIG}"
   }
 }
