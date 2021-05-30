@@ -1,5 +1,37 @@
 #!/bin/bash
 
+while getopts ":s:d:u:p:o:d:v:c" opt; do
+  case $opt in
+  s)
+    SERVER_NAME="$OPTARG"
+    ;;
+  d)
+    DOMAIN_NAME="$OPTARG"
+    ;;
+  u)
+    SQL_USER="$OPTARG"
+    ;;
+  p)
+    SQL_PASSWORD="$OPTARG"
+    ;;
+  o)
+    POSTFIX_PASSWORD="$OPTARG"
+    ;;
+  d)
+    MAIL_DATABASE="$OPTARG"
+    ;;
+  v)
+    INSTALL_ANTIVIRUS="$OPTARG"
+    ;;
+  c)
+    EMAIL_CONFIG="$OPTARG"
+    ;;
+  \?)
+    echo "Invalid option -$OPTARG" >&2
+    ;;
+  esac
+done
+
 [[ -z "${MAIL_DATABASE}" ]] && {
   MAIL_DATABASE="mail"
 }
