@@ -1307,8 +1307,6 @@ use strict;
 #------------ Do not modify anything below this line -------------
 1;  # ensure a defined return
 _EOF_
-  sudo systemctl stop clamav-freshclam.service
-  freshclam
   sudo systemctl restart clamav-daemon
   sudo systemctl restart amavis
   sudo systemctl restart spamassassin
@@ -1501,7 +1499,7 @@ installPostfixAdmin() {
 ?>
 _EOF_
   sudo systemctl restart nginx
-  setupDatabase=$(curl https://mail.local-build.co/setup.php -k)
+  setupDatabase=$(curl https://localhost/setup.php -k)
   set +e
   sudo bash /var/www/postfixadmin/scripts/postfixadmin-cli admin add superadmin@${localDomain} --superadmin 1 --active 1 --password ${POSTFIX_PASSWORD} --password2 ${POSTFIX_PASSWORD}
   sudo bash /var/www/postfixadmin/scripts/postfixadmin-cli domain add ${localDomain} aliases=0 mailboxes=0
@@ -1512,6 +1510,10 @@ _EOF_
 saveDnsConfiguration() {
   cat >/root/dns_config <<_EOF_
 {
+  "server": {
+    "ipv4": "${ipv4}",
+    "ipv6": "${ipv6temp}"
+  },
   "SPF_RECORD": {
     "key": "@",
     "type": "TXT",
@@ -1589,6 +1591,8 @@ generateCertificate
 # Reloading Services
 reload
 
+# Installing PostfixAdmin webclient
 installPostfixAdmin
 
+# uploading  the DNS configuration
 saveDnsConfiguration
