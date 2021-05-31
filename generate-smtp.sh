@@ -944,7 +944,9 @@ _EOF_
   set -e
   if [ -z "$SIGNTABLE_RECORD_EXISTS" ]; then
     output "FQDN record not found in the signing table, adding"
-    printf "*@$FQDN $SHORT_FQDN" >>/etc/opendkim/signing.table
+    cat >>/etc/opendkim/signing.table <<_EOF_
+*@$FQDN $SHORT_FQDN
+_EOF_
   else
     output "FQDN record already present in the signing table"
   fi
@@ -953,8 +955,10 @@ _EOF_
   KEYTABLE_RECORD_EXISTS=$(grep -n "$KEYTABLE" /etc/opendkim/key.table)
   set -e
   if [ -z "$KEYTABLE_RECORD_EXISTS" ]; then
-    output "Key record not found in the signing table, adding"
-    printf "$SHORT_FQDN $FQDN:$KEYNAME:/etc/opendkim/keys/$SHORT_FQDN.private" >>/etc/opendkim/key.table
+    output "Key record not found in the key table, adding"
+    cat >>/etc/opendkim/key.table <<_EOF_
+$SHORT_FQDN $FQDN:$KEYNAME:/etc/opendkim/keys/$SHORT_FQDN.private
+_EOF_
   else
     output "Key record already present in the signing table"
   fi
@@ -962,7 +966,7 @@ _EOF_
   if [ -z "$KEYTABLE_RECORD_EXISTS" ]; then
     cd /etc/opendkim/keys
 
-    echo "Removing existing keys"
+    echo "Removing existing keys" | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
     if test -f /etc/opendkim/keys/${SHORT_FQDN}.private; then
       rm /etc/opendkim/keys/${SHORT_FQDN}.private
     fi
@@ -970,9 +974,9 @@ _EOF_
       rm /etc/opendkim/keys/${SHORT_FQDN}.txt
     fi
 
-    opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v
+    opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
 
-    echo "Renaming the generated keys to ${SHORT_FQDN}.private"
+    echo "Renaming the generated keys to ${SHORT_FQDN}.private" | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
     mv ${KEYNAME}.private ${SHORT_FQDN}.private
     mv ${KEYNAME}.txt ${SHORT_FQDN}.txt
 
@@ -980,6 +984,7 @@ _EOF_
   else
     output "DKIM keys have already been generated, ignoring..."
   fi
+
   chown -R opendkim:opendkim /etc/opendkim
   chmod -R go-rw /etc/opendkim/keys
 
