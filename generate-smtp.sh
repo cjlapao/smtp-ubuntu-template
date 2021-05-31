@@ -1042,9 +1042,6 @@ installOpenDmarc() {
 
   echo "Adding postfix group to opendmarc user" | ts ["%F %H:%M:%S"] | tee -a install.log
   sudo adduser postfix opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
-
-  echo "Restarting the OpenDMARC service" | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
 }
 
 setupOpenDmarc() {
@@ -1313,6 +1310,7 @@ _EOF_
 
 reload() {
   echo "Reloading Services..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo systemctl restart nginx | ts ["%F %H:%M:%S"] | tee -a install.log
   sudo systemctl restart postgrey | ts ["%F %H:%M:%S"] | tee -a install.log
   sudo systemctl restart spamassassin | ts ["%F %H:%M:%S"] | tee -a install.log
   sudo systemctl restart opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
