@@ -26,7 +26,7 @@ while getopts ":s:d:u:p:o:a:v:c:l:" opt; do
   c)
     EMAIL_CONFIG="$OPTARG"
     ;;
-  c)
+  l)
     LOG_LOCATION="$OPTARG"
     ;;
   \?)
