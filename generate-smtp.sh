@@ -102,9 +102,12 @@ generateCertificate() {
     echo "Local domain not setup"
     exit 127
   }
-
-  echo "Generating domain certificate for domain ${localHostname}" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  output "Stopping Nginx"
+  sudo systemctl stop nginx
+  output "Generating domain certificate for domain ${localHostname}"
   /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql; systemctl restart nginx' | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  output "Restarting Nginx"
+  systemctl start nginx
 }
 
 installNginx() {
@@ -1450,12 +1453,14 @@ installPostfixAdmin() {
     output "Removing PostfixAdmin folder..."
     sudo rm -r /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
-
+  output "Downloading Weblcient..."
   git clone https://github.com/postfixadmin/postfixadmin.git /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
+  output "Setting PostfixAdmin template folders"
   mkdir -p /var/www/postfixadmin/templates_c
   chown -R www-data /var/www/postfixadmin/templates_c
 
+  output "Generating PostfixAdmin Passwords"
   postfixAdminPassword=$(php -r "echo password_hash('${POSTFIX_PASSWORD}', PASSWORD_DEFAULT);")
 
   cat >/var/www/postfixadmin/config.local.php <<_EOF_
@@ -1490,8 +1495,12 @@ installPostfixAdmin() {
 \$CONF['domain_quota_default'] = '0';
 ?>
 _EOF_
+
+  output "Restarting Nginx service"
   sudo systemctl restart nginx
+  output "Generating Database"
   setupDatabase=$(curl https://localhost/setup.php -k)
+  output "Creating users"
   set +e
   sudo bash /var/www/postfixadmin/scripts/postfixadmin-cli admin add superadmin@${localDomain} --superadmin 1 --active 1 --password ${POSTFIX_PASSWORD} --password2 ${POSTFIX_PASSWORD}
   sudo bash /var/www/postfixadmin/scripts/postfixadmin-cli domain add ${localDomain} aliases=0 mailboxes=0
@@ -1588,3 +1597,5 @@ installPostfixAdmin
 
 # uploading  the DNS configuration
 saveDnsConfiguration
+
+output "Installation finished..."
