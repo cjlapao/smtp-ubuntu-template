@@ -85,7 +85,8 @@ updateSystem() {
     php-mbstring \
     php-imap \
     mutt \
-    sipcalc |
+    sipcalc \
+    python3-pip |
     tee -a install.log
   localDomain=${DOMAIN_NAME}
 }
@@ -466,8 +467,6 @@ virtual_gid_maps = static:8
 virtual_alias_maps = mysql:/etc/postfix/mysql_virtual_alias_maps.cf, mysql:/etc/postfix/mysql_virtual_alias_domainaliases_maps.cf
 virtual_mailbox_domains = mysql:/etc/postfix/mysql_virtual_domains_maps.cf
 smtpd_sender_login_maps = mysql:/etc/postfix/mysql_virtual_sender_login_maps.cf
-
-policy-spf_time_limit = 3600s
 
 # Getting rid of unwanted headers. See: https://posluns.com/guides/header-removal/
 header_checks = regexp:/etc/postfix/header_checks
@@ -960,23 +959,27 @@ _EOF_
     output "Key record already present in the signing table"
   fi
 
-  cd /etc/opendkim/keys
+  if [ -z "$KEYTABLE_RECORD_EXISTS" ]; then
+    cd /etc/opendkim/keys
 
-  output "Removing existing keys"
-  if test -f /etc/opendkim/keys/${SHORT_FQDN}.private; then
-    rm /etc/opendkim/keys/${SHORT_FQDN}.private
+    echo "Removing existing keys"
+    if test -f /etc/opendkim/keys/${SHORT_FQDN}.private; then
+      rm /etc/opendkim/keys/${SHORT_FQDN}.private
+    fi
+    if test -f /etc/opendkim/keys/${SHORT_FQDN}.private; then
+      rm /etc/opendkim/keys/${SHORT_FQDN}.txt
+    fi
+
+    opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v
+
+    echo "Renaming the generated keys to ${SHORT_FQDN}.private"
+    mv ${KEYNAME}.private ${SHORT_FQDN}.private
+    mv ${KEYNAME}.txt ${SHORT_FQDN}.txt
+
+    cd ~
+  else
+    output "DKIM keys have already been generated, ignoring..."
   fi
-  if test -f /etc/opendkim/keys/${SHORT_FQDN}.private; then
-    rm /etc/opendkim/keys/${SHORT_FQDN}.txt
-  fi
-
-  opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v
-
-  echo "Renaming the generated keys to ${SHORT_FQDN}.private"
-  mv ${KEYNAME}.private ${SHORT_FQDN}.private
-  mv ${KEYNAME}.txt ${SHORT_FQDN}.txt
-
-  cd /etc
   chown -R opendkim:opendkim /etc/opendkim
   chmod -R go-rw /etc/opendkim/keys
 
@@ -1019,10 +1022,7 @@ _EOF_
 installOpenDmarc() {
   echo "Installing OpenDMARC" | ts ["%F %H:%M:%S"] | tee -a install.log
 
-  sudo apt-get install --assume-yes \
-    opendmarc |
-    ts ["%F %H:%M:%S"] |
-    tee -a install.log
+  DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
 
   echo "Enable OpenDMARC to auto restart" | ts ["%F %H:%M:%S"] | tee -a install.log
   sudo systemctl enable opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
@@ -1054,6 +1054,7 @@ setupOpenDmarc() {
 AuthservID OpenDMARC
 IgnoreAuthenticatedClients true
 RequiredHeaders true
+SPFIgnoreResults true
 SPFSelfValidate true
 PidFile /var/run/opendmarc/opendmarc.pid
 PublicSuffixList /usr/share/publicsuffix

@@ -12,4 +12,4 @@
 git clone https://github.com/cjlapao/smtp-ubuntu-template.git
 
 chmod +x /root/smtp-ubuntu-template/generate-smtp.sh
-/root/smtp-ubuntu-template/generate-smtp.sh -s ${SERVER_NAME} -d ${DOMAIN_NAME} -u ${SQL_USER} -p ${SQL_PASSWORD} -o ${POSTFIX_PASSWORD} -d ${MAIL_DATABASE} -v ${INSTALL_ANTIVIRUS} -c ${EMAIL_CONFIG}
+/root/smtp-ubuntu-template/generate-smtp.sh -s ${SERVER_NAME} -d ${DOMAIN_NAME} -u ${SQL_USER} -p ${SQL_PASSWORD} -o ${POSTFIX_PASSWORD} -a ${MAIL_DATABASE} -v ${INSTALL_ANTIVIRUS} -c ${EMAIL_CONFIG}
