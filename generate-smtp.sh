@@ -1001,9 +1001,6 @@ _EOF_
 
   output "The DKIM record was added successfully to the domain $FQDN"
 
-  output "Restarting the services"
-  systemctl restart opendkim
-  systemctl restart postfix
   ipv4=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
   ipv6temp=$(ip -6 addr show eth0 | grep -oP '(?<=inet6\s)[\da-f:]+' | tr '\n' ' ')
   IFS="," read -a ipv6 <<<${ipv6temp}
