@@ -1,38 +1,33 @@
 #!/bin/bash
 
-while getopts ":s:d:u:p:o:a:v:c:" opt; do
+while getopts ":s:d:u:p:o:a:v:c:l:" opt; do
   case $opt in
   s)
     SERVER_NAME="$OPTARG"
-    echo "SERVER_NAME=${OPTARG}" | tee -a install.log
     ;;
   d)
     DOMAIN_NAME="$OPTARG"
-    echo "DOMAIN_NAME=${OPTARG}" | tee -a install.log
     ;;
   u)
     SQL_USER="$OPTARG"
-    echo "SQL_USER=${OPTARG}" | tee -a install.log
     ;;
   p)
     SQL_PASSWORD="$OPTARG"
-    echo "SQL_PASSWORD=${OPTARG}" | tee -a install.log
     ;;
   o)
     POSTFIX_PASSWORD="$OPTARG"
-    echo "POSTFIX_PASSWORD=${OPTARG}" | tee -a install.log
     ;;
   a)
     MAIL_DATABASE="$OPTARG"
-    echo "MAIL_DATABASE=${OPTARG}" | tee -a install.log
     ;;
   v)
     INSTALL_ANTIVIRUS="$OPTARG"
-    echo "INSTALL_ANTIVIRUS=${OPTARG}" | tee -a install.log
     ;;
   c)
     EMAIL_CONFIG="$OPTARG"
-    echo "EMAIL_CONFIG=${OPTARG}" | tee -a install.log
+    ;;
+  c)
+    LOG_LOCATION="$OPTARG"
     ;;
   \?)
     echo "Invalid option -$OPTARG" >&2
@@ -56,10 +51,10 @@ done
 
 hostname "${SERVER_NAME}.${DOMAIN_NAME}"
 hostname
-echo '' >install.log
+echo '' >$LOG_LOCATION
 
 output() {
-  echo "$1" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "$1" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 checkForErrors() {
@@ -72,12 +67,12 @@ checkForErrors() {
 updateSystem() {
 
   localHostname="${SERVER_NAME}.${DOMAIN_NAME}"
-  echo "Getting the latest packages" | tee -a install.log
+  echo "Getting the latest packages" | tee -a $LOG_LOCATION
   set -o errexit # abort on nonzero exitstatus
   set -o nounset # abort on unbound variable
 
-  sudo apt-get update | tee -a install.log
-  sudo apt-get upgrade --assume-yes | tee -a install.log
+  sudo apt-get update | tee -a $LOG_LOCATION
+  sudo apt-get upgrade --assume-yes | tee -a $LOG_LOCATION
   sudo apt-get install --assume-yes \
     moreutils \
     php-fpm \
@@ -87,19 +82,19 @@ updateSystem() {
     mutt \
     sipcalc \
     python3-pip |
-    tee -a install.log
+    tee -a $LOG_LOCATION
   localDomain=${DOMAIN_NAME}
 }
 
 installCertBot() {
-  sudo add-apt-repository universe | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo apt-get update --assume-yes | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo add-apt-repository universe | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo apt-get update --assume-yes | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo apt-get install --assume-yes \
     certbot \
     python3-certbot-nginx |
     ts |
-    tee -a install.log
-  wget -O - https://get.acme.sh | sh -s email=postfix@${localDomain} | ts ["%F %H:%M:%S"] | tee -a install.log
+    tee -a $LOG_LOCATION
+  wget -O - https://get.acme.sh | sh -s email=postfix@${localDomain} | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 generateCertificate() {
@@ -108,24 +103,24 @@ generateCertificate() {
     exit 127
   }
 
-  echo "Generating domain certificate for domain ${localHostname}" | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
-  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql; systemctl restart nginx' | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Generating domain certificate for domain ${localHostname}" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql; systemctl restart nginx' | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 installNginx() {
-  echo "Installing NGINX..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing NGINX..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo apt-get install --assume-yes \
     ca-certificates \
     nginx-full |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
-  echo "Adding NGINX firewall rule..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow http | ts ["%F %H:%M:%S"] | tee -a install.log
+    tee -a $LOG_LOCATION
+  echo "Adding NGINX firewall rule..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow http | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 setupNginx() {
-  echo "Setting up NGINX Web server..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up NGINX Web server..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat <<_EOF_ >/etc/nginx/nginx.conf
 user www-data;
 worker_processes auto;
@@ -177,7 +172,7 @@ _EOF_
 add_header Content-Security-Policy "default-src 'self'; upgrade-insecure-requests; block-all-mixed-content";
 _EOF_
   if test -f "/etc/nginx/sites-enabled/default"; then
-    sudo rm /etc/nginx/sites-enabled/default | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm /etc/nginx/sites-enabled/default | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
   cat >/etc/nginx/sites-enabled/postfixadmin <<_EOF_
@@ -252,7 +247,7 @@ check_sql_active() {
 }
 
 installDatabase() {
-  echo "Installing MariaDB..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing MariaDB..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   [[ -z "${SQL_USER}" ]] && {
     echo "SQL User was not set"
     exit 127
@@ -265,11 +260,11 @@ installDatabase() {
   sudo apt-get install --assume-yes \
     mariadb-server |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 }
 
 secureDatabase() {
-  echo "Securing MariaDB..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Securing MariaDB..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   if ! is_mysql_command_available; then
     echo "The MySQL/MariaDB client mysql is not installed."
@@ -299,15 +294,15 @@ FLUSH PRIVILEGES;
 _EOF_
 
   checkForErrors "Could not create users"
-  sudo ufw allow 3306 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart mysql | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo ufw allow 3306 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart mysql | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   check_sql_active
 }
 
 setupDatabase() {
   echo ${localHostname}
-  echo "Setting up MariaDB SQL server..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/mysql/mariadb.conf.d/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up MariaDB SQL server..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/mysql/mariadb.conf.d/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat <<_EOF_ >/etc/mysql/mariadb.conf.d/50-server.cnf
 [server]
 
@@ -360,13 +355,13 @@ installPostfix() {
     postfix-policyd-spf-python \
     postfix-pcre |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 }
 
 setupPostfix() {
-  echo "Setting up Postfix..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/postfix/main.cf /etc/postfix/main.cf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/postfix/master.cf /etc/postfix/master.cf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up Postfix..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/postfix/main.cf /etc/postfix/main.cf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/postfix/master.cf /etc/postfix/master.cf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat >/etc/postfix/main.cf <<_EOF_
 # See /usr/share/postfix/main.cf.dist for a commented, more complete version
 # Debian specific:  Specifying a file name will cause the first
@@ -632,7 +627,7 @@ _EOF_
 }
 
 installDovecot() {
-  echo "Installing Dovecot..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing Dovecot..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   set -e
   set -o nounset # abort on unbound variable
 
@@ -644,16 +639,16 @@ installDovecot() {
     dovecot-lmtpd \
     dovecot-mysql |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 
   # Adding the vhosts folder
-  echo "Adding the vhosts folders" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding the vhosts folders" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   if ! test -d "/var/mail/vhosts"; then
-    sudo mkdir -p "/var/mail/vhosts" | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo mkdir -p "/var/mail/vhosts" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
   # Adding the virtual user
-  echo "Adding the vmail user to system" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding the vmail user to system" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   set +e
   USERID=$(id -u vmail)
   userTest=$?
@@ -661,21 +656,21 @@ installDovecot() {
 
   if [ "$userTest" -ne 0 ]; then
     echo "Creating Users"
-    sudo groupadd -g 5000 vmail | ts ["%F %H:%M:%S"] | tee -a install.log
-    sudo useradd -g vmail -u 5000 vmail -d /var/mail | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo groupadd -g 5000 vmail | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    sudo useradd -g vmail -u 5000 vmail -d /var/mail | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  echo "Adding the user for the folder /var/mail" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding the user for the folder /var/mail" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo chown -R vmail:vmail /var/mail
 }
 
 setupDovecot() {
-  echo "Setting up Dovecot..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/dovecot/conf.d/10-auth.conf /etc/dovecot/conf.d/10-auth.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/dovecot/conf.d/10-mail.conf /etc/dovecot/conf.d/10-mail.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/dovecot/conf.d/10-master.conf /etc/dovecot/conf.d/10-master.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/dovecot/conf.d/10-ssl.conf /etc/dovecot/conf.d/10-ssl.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up Dovecot..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/dovecot/conf.d/10-auth.conf /etc/dovecot/conf.d/10-auth.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/dovecot/conf.d/10-mail.conf /etc/dovecot/conf.d/10-mail.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/dovecot/conf.d/10-master.conf /etc/dovecot/conf.d/10-master.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/dovecot/conf.d/10-ssl.conf /etc/dovecot/conf.d/10-ssl.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   cat >/etc/dovecot/conf.d/10-auth.conf <<_EOF_
 ##
@@ -839,7 +834,7 @@ _EOF_
 }
 
 installOpenDkim() {
-  echo "Installing OpenDKIM" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing OpenDKIM" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   FQDN=$(hostname -d)
   DKIM_HOSTNAME=$(hostname -s)
   SHORT_FQDN=$(echo $FQDN | tr "." "_")
@@ -852,46 +847,46 @@ installOpenDkim() {
     postfix-policyd-spf-python \
     postfix-pcre |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 
-  echo "Generating default configuration files" | ts ["%F %H:%M:%S"] | tee -a install.log
-  chmod u=rw,go=r /etc/opendkim.conf | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Generating default configuration files" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  chmod u=rw,go=r /etc/opendkim.conf | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   if ! test -d /etc/opendkim; then
-    echo "Creating the key default structure" | ts ["%F %H:%M:%S"] | tee -a install.log
-    mkdir /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
-    mkdir /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Creating the key default structure" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    mkdir /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    mkdir /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  chown -R opendkim:opendkim /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
-  chmod go-rw /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a install.log
+  chown -R opendkim:opendkim /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  chmod go-rw /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   if ! test -f /etc/opendkim/signing.table; then
-    echo "Creating Signing Table file" | ts ["%F %H:%M:%S"] | tee -a install.log
-    touch /etc/opendkim/signing.table | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Creating Signing Table file" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    touch /etc/opendkim/signing.table | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
   if ! test -f /etc/opendkim/key.table; then
-    echo "Creating Key Table file" | ts ["%F %H:%M:%S"] | tee -a install.log
-    touch /etc/opendkim/key.table | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Creating Key Table file" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    touch /etc/opendkim/key.table | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
   if ! test -f /etc/opendkim/trusted.hosts; then
-    echo "Adding the computer default trusted senders" | ts ["%F %H:%M:%S"] | tee -a install.log
-    printf "127.0.0.1\n::1\nlocalhost\n$DKIM_HOSTNAME\n$DKIM_HOSTNAME.$FQDN\nmail.$FQDN\n$FQDN" >/etc/opendkim/trusted.hosts | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Adding the computer default trusted senders" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    printf "127.0.0.1\n::1\nlocalhost\n$DKIM_HOSTNAME\n$DKIM_HOSTNAME.$FQDN\nmail.$FQDN\n$FQDN" >/etc/opendkim/trusted.hosts | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  echo "Adding OpenDKIM to postfix" | ts ["%F %H:%M:%S"] | tee -a install.log
-  chown -R opendkim:opendkim /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
-  chmod -R go-rwx /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding OpenDKIM to postfix" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  chown -R opendkim:opendkim /etc/opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  chmod -R go-rwx /etc/opendkim/keys | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   if ! test -d /var/spool/postfix/opendkim; then
-    mkdir /var/spool/postfix/opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
+    mkdir /var/spool/postfix/opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  chown opendkim:postfix /var/spool/postfix/opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo adduser postfix opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
+  chown opendkim:postfix /var/spool/postfix/opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo adduser postfix opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  echo "Finished" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Finished" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 setupOpenDkim() {
@@ -1016,37 +1011,37 @@ _EOF_
   DMARC_RECORD="v=DMARC1;p=quarantine;sp=quarantine;adkim=r;aspf=r;fo=1;rf=afrf;rua=mailto:admin@${FQDN}"
 
   # Fixing the debian issue with the wrong socket
-  echo "Fixing the Ubuntu Socket Error" | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo /lib/opendkim/opendkim.service.generate | ts ["%F %H:%M:%S"] | tee -a install.log
-  systemctl daemon-reload | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Fixing the Ubuntu Socket Error" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo /lib/opendkim/opendkim.service.generate | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  systemctl daemon-reload | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   output "Finished configuring OpenDmarc/OpenDkim DNS records"
 }
 
 installOpenDmarc() {
-  echo "Installing OpenDMARC" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing OpenDMARC" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
+  DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes opendmarc | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  echo "Enable OpenDMARC to auto restart" | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl enable opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Enable OpenDMARC to auto restart" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl enable opendmarc | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   echo "Creating the SOCKET configuration"
   if ! test -d /var/spool/postfix/opendmarc; then
-    echo "Default SOCKET folder does not exists, creating" | ts ["%F %H:%M:%S"] | tee -a install.log
-    sudo mkdir -p /var/spool/postfix/opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Default SOCKET folder does not exists, creating" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+    sudo mkdir -p /var/spool/postfix/opendmarc | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  sudo chown opendmarc:opendmarc /var/spool/postfix/opendmarc -R | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo chmod 750 /var/spool/postfix/opendmarc/ -R | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo chown opendmarc:opendmarc /var/spool/postfix/opendmarc -R | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo chmod 750 /var/spool/postfix/opendmarc/ -R | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  echo "Adding postfix group to opendmarc user" | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo adduser postfix opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding postfix group to opendmarc user" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo adduser postfix opendmarc | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 setupOpenDmarc() {
-  echo "Setting up OpenDMARC..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/opendmarc.conf /etc/opendmarc.conf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up OpenDMARC..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/opendmarc.conf /etc/opendmarc.conf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat >/etc/opendmarc.conf <<_EOF_
 # This is a basic configuration that can easily be adapted to suit a standard
 # installation. For more advanced options, see opendkim.conf(5) and/or
@@ -1069,23 +1064,23 @@ _EOF_
 }
 
 installPostgrey() {
-  echo "Installing Postgrey" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing Postgrey" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo apt-get update
-  debconf-set-selections <<<"postfix postfix/mailname string $SERVER_NAME" | ts ["%F %H:%M:%S"] | tee -a install.log
-  debconf-set-selections <<<"postfix postfix/main_mailer_type string 'Internet Site'" | ts ["%F %H:%M:%S"] | tee -a install.log
+  debconf-set-selections <<<"postfix postfix/mailname string $SERVER_NAME" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  debconf-set-selections <<<"postfix postfix/main_mailer_type string 'Internet Site'" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo apt-get install --assume-yes \
     postgrey |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 
-  echo "Restarting Postgrey" | ts ["%F %H:%M:%S"] | tee -a install.log
-  systemctl enable postgrey | ts ["%F %H:%M:%S"] | tee -a install.log
-  systemctl start postgrey | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Restarting Postgrey" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  systemctl enable postgrey | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  systemctl start postgrey | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 setupPostgrey() {
-  echo "Setting up Postgrey..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/default/postgrey /etc/default/postgrey.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up Postgrey..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/default/postgrey /etc/default/postgrey.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat >/etc/default/postgrey <<_EOF_
 #test
 # postgrey startup options, created for Debian
@@ -1104,14 +1099,14 @@ _EOF_
 }
 
 installSpamAssassin() {
-  echo "Installing SpamAssassin" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing SpamAssassin" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   sudo apt install --assume-yes \
     spamassassin \
     spamc |
     ts ["%F %H:%M:%S"] |
-    tee -a install.log
+    tee -a $LOG_LOCATION
 
-  echo "Adding SpamAssassin User" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Adding SpamAssassin User" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   set +e
   USER=$(id -u spamd >/dev/null 2>&1)
   if [ $? -eq 1 ]; then
@@ -1119,16 +1114,16 @@ installSpamAssassin() {
   fi
   set -e
 
-  echo "Restarting SpamAssassin" | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Restarting SpamAssassin" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  sudo systemctl enable spamassassin | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl start spamassassin | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo systemctl enable spamassassin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl start spamassassin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 setupSpamAssassin() {
-  echo "Setting up SpamAssassin..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/default/spamassassin /etc/default/spamassassin.bak | ts ["%F %H:%M:%S"] | tee -a install.log
-  cp /etc/spamassassin/local.cf /etc/spamassassin/local.cf.bak | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Setting up SpamAssassin..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/default/spamassassin /etc/default/spamassassin.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  cp /etc/spamassassin/local.cf /etc/spamassassin/local.cf.bak | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   cat >/etc/default/spamassassin <<_EOF_
 # /etc/default/spamassassin
 # Duncan Findlay
@@ -1152,17 +1147,17 @@ _EOF_
 }
 
 installAntivirus() {
-  echo "Installing Antivirus" | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo apt-get install --assume-yes amavisd-new clamav clamav-daemon | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Installing Antivirus" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo apt-get install --assume-yes amavisd-new clamav clamav-daemon | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   USER=$(id -u clamav >/dev/null 2>&1)
   if [ $? -eq 1 ]; then
-    echo "Creating clamav user" | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Creating clamav user" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
     yes | sudo adduser clamav amavis --disabled-login
   fi
   USER=$(id -u amavis >/dev/null 2>&1)
   if [ $? -eq 1 ]; then
-    echo "Creating amavis user" | ts ["%F %H:%M:%S"] | tee -a install.log
+    echo "Creating amavis user" | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
     yes | sudo adduser amavis clamav --disabled-login
   fi
 
@@ -1309,19 +1304,19 @@ _EOF_
 }
 
 reload() {
-  echo "Reloading Services..." | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart nginx | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart postgrey | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart spamassassin | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart opendkim | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart opendmarc | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart dovecot | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart postfix | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo systemctl restart mysql | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Reloading Services..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart nginx | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart postgrey | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart spamassassin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart opendkim | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart opendmarc | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart dovecot | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart postfix | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo systemctl restart mysql | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 initDatabase() {
-  echo "Initiating Mail Database..." | ts ["%F %H:%M:%S"] | tee -a install.log
+  echo "Initiating Mail Database..." | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   mailUser="postfix"
   localhostUUID=$(uuidgen)
@@ -1346,16 +1341,16 @@ _EOF_
 
   # generating the sql files for postfix
   if test -f "/etc/postfix/mysql_virtual_alias_domainaliases_maps.cf"; then
-    sudo rm /etc/postfix/mysql_virtual_alias_domainaliases_maps.cf | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm /etc/postfix/mysql_virtual_alias_domainaliases_maps.cf | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
   if test -f "/etc/postfix/mysql_virtual_alias_maps.cf"; then
-    sudo rm /etc/postfix/mysql_virtual_alias_maps.cf | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm /etc/postfix/mysql_virtual_alias_maps.cf | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
   if test -f "/etc/postfix/mysql-virtual-alias-maps.cf"; then
-    sudo rm /etc/postfix/mysql-virtual-alias-maps.cf | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm /etc/postfix/mysql-virtual-alias-maps.cf | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
   if test -f "/etc/postfix/mysql-virtual-email2email.cf"; then
-    sudo rm /etc/postfix/mysql-virtual-email2email.cf | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm /etc/postfix/mysql-virtual-email2email.cf | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
   cat >/etc/postfix/mysql_virtual_alias_domainaliases_maps.cf <<_EOF_
@@ -1431,32 +1426,32 @@ _EOF_
 _EOF_
 
   ## Creating the virtual host folder
-  sudo mkdir -p /var/mail/vhosts/${localDomain} | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo chown -R vmail:vmail /var/mail | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo mkdir -p /var/mail/vhosts/${localDomain} | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo chown -R vmail:vmail /var/mail | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
-  sudo chown -R vmail:dovecot /etc/dovecot | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo chmod -R o-rwx /etc/dovecot | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo chown -R vmail:dovecot /etc/dovecot | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo chmod -R o-rwx /etc/dovecot | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   # Unjail the mysql and postfix
   echo "/var/run/mysqld /var/spool/postfix/var/run/mysqld bind defaults,bind 0 0" >>/etc/fstab
 
-  sudo ufw allow 25 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 465 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 587 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 143 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 993 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 110 | ts ["%F %H:%M:%S"] | tee -a install.log
-  sudo ufw allow 995 | ts ["%F %H:%M:%S"] | tee -a install.log
+  sudo ufw allow 25 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 465 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 587 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 143 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 993 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 110 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
+  sudo ufw allow 995 | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 }
 
 installPostfixAdmin() {
   output "Installing PostfixAdmin..."
   if test -d "/var/www/postfixadmin"; then
     output "Removing PostfixAdmin folder..."
-    sudo rm -r /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a install.log
+    sudo rm -r /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
   fi
 
-  git clone https://github.com/postfixadmin/postfixadmin.git /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a install.log
+  git clone https://github.com/postfixadmin/postfixadmin.git /var/www/postfixadmin | ts ["%F %H:%M:%S"] | tee -a $LOG_LOCATION
 
   mkdir -p /var/www/postfixadmin/templates_c
   chown -R www-data /var/www/postfixadmin/templates_c
