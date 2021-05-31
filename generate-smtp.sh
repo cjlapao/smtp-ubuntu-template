@@ -974,7 +974,7 @@ _EOF_
       rm /etc/opendkim/keys/${SHORT_FQDN}.txt
     fi
 
-    opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
+    sudo opendkim-genkey -b 2048 -h rsa-sha256 -r -s ${KEYNAME} -d ${FQDN} -v | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
 
     echo "Renaming the generated keys to ${SHORT_FQDN}.private" | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
     mv ${KEYNAME}.private ${SHORT_FQDN}.private
@@ -984,6 +984,8 @@ _EOF_
   else
     output "DKIM keys have already been generated, ignoring..."
   fi
+
+  output "Creating Users"
 
   chown -R opendkim:opendkim /etc/opendkim
   chmod -R go-rw /etc/opendkim/keys
