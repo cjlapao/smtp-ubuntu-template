@@ -1267,7 +1267,7 @@ use strict;
 
 
 @bypass_virus_checks_maps = (
-   \\%bypass_virus_checks, \\@bypass_virus_checks_acl, \\\$bypass_virus_checks_re);
+  \\%bypass_virus_checks, \\@bypass_virus_checks_acl, \\\$bypass_virus_checks_re);
 
 
 #
@@ -1278,26 +1278,26 @@ use strict;
 
 
 @bypass_spam_checks_maps = (
-   \\%bypass_spam_checks, \\@bypass_spam_checks_acl, \\\$bypass_spam_checks_re);
+  \\%bypass_spam_checks, \\@bypass_spam_checks_acl, \\\$bypass_spam_checks_re);
 
 1;  # ensure a defined return
 _EOF_
   cat >/etc/amavis/conf.d/50-user <<_EOF_
 use strict;
- 
+
 \$max_servers  = 3;
- 
+
 \$sa_tag_level_deflt  = -9999;
- 
+
 @lookup_sql_dsn = (
     ['DBI:mysql:database=mail;host=127.0.0.1;port=3306',
-     '${SQL_USER}',
-     '${SQL_PASSWORD}']);
+      '${SQL_USER}',
+      '${SQL_PASSWORD}']);
 \$sql_select_policy = 'SELECT domain from domain WHERE CONCAT("@",domain) IN (%k)';
- 
+
 # Uncomment to bump up the log level when testing.
 # \$log_level = 2;
- 
+
 #------------ Do not modify anything below this line -------------
 1;  # ensure a defined return
 _EOF_
