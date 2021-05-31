@@ -107,7 +107,9 @@ generateCertificate() {
     echo "Local domain not setup"
     exit 127
   }
-  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql' | ts ["%F %H:%M:%S"] | tee -a install.log
+
+  echo "Generating domain certificate for domain ${localHostname}" | ts ["%F %H:%M:%S"] | tee -a /tools/install.log
+  /root/.acme.sh/acme.sh --issue --alpn --standalone -d ${localHostname} --home /usr/share/ca-certificates --post-hook "cat /usr/share/ca-certificates/${localHostname}/${localHostname}.key /usr/share/ca-certificates/${localHostname}/${localHostname}.cer > /usr/share/ca-certificates/${localHostname}/${localHostname}.pem" --reloadcmd 'systemctl restart postfix; systemctl restart dovecot; systemctl restart mysql; systemctl restart nginx' | ts ["%F %H:%M:%S"] | tee -a install.log
 }
 
 installNginx() {
@@ -216,15 +218,13 @@ server {
     location ~ \.php\$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
-     }
+    }
 
     location ~ /\.ht {
         deny all;
     }
 }
 _EOF_
-
-  systemctl restart nginx | ts ["%F %H:%M:%S"] | tee -a install.log
 }
 
 # Predicate that returns exit status 0 if the database root password
@@ -1544,8 +1544,6 @@ _EOF_
 updateSystem
 # Installing Web Service and Certification Service
 installCertBot
-# installing Certificates
-generateCertificate
 
 installNginx
 setupNginx
@@ -1585,9 +1583,12 @@ setupSpamAssassin
 # Initiate Mail Database
 initDatabase
 
-installPostfixAdmin
+# installing Certificates
+generateCertificate
 
 # Reloading Services
 reload
+
+installPostfixAdmin
 
 saveDnsConfiguration
